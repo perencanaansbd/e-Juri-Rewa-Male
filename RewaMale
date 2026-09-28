@@ -1,0 +1,1146 @@
+node_modules/
+server/database.sqlite
+server/database.sqlite-shm
+server/database.sqlite-wal
+*.log
+.DS_Store
+
+{
+  "name": "e-juri-rewa-male",
+  "version": "2.0.0",
+  "private": true,
+  "description": "E-Juri Rewa Male - server lokal multi-user untuk penilaian perlombaan dengan master Lingkungan/KUB dan visual lomba Katolik",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.3",
+    "express": "5.2.1",
+    "express-session": "1.18.2",
+    "socket.io": "4.8.3",
+    "exceljs": "4.4.0",
+    "pdfkit": "0.17.1"
+  }
+}
+
+# E-Juri Rewa Male — V8 Tingkat Peserta & Single Login
+
+## Pengembangan utama
+- Jumlah juri tetap **fleksibel**: nomor juri dapat 1, 2, 3, 4, 5, dan seterusnya.
+- Pada **Tambah/Edit User/Juri**, Admin dapat memilih:
+  - jenis lomba yang dinilai;
+  - satu atau beberapa **tingkat peserta**: **Temu Minggu, Sekami, Taruk, OMK**.
+- Penugasan juri disimpan per kombinasi **Lomba + Tingkat**, sehingga Juri 1 pada Temu Minggu tidak bercampur dengan Juri 1 pada OMK.
+- Peserta memiliki tingkat masing-masing. **Hasil, ranking, nilai juri, rekap, export, dashboard, dan halaman Live dipisahkan berdasarkan tingkat**.
+- Setiap akun hanya boleh mempunyai **satu sesi login aktif**. Login dari browser/perangkat lain saat sesi masih aktif ditolak. Sesi yang tidak aktif akan berakhir otomatis setelah masa lease habis (default 3 menit tanpa heartbeat).
+- Browser menyimpan identitas device untuk membantu identifikasi perangkat. Penolakan akses tetap berdasarkan satu sesi aktif per akun.
+- Dukungan **Ngrok** disediakan melalui `START_NGROK.bat` agar aplikasi dapat dibuka dari jaringan/internet melalui URL HTTPS Ngrok.
+- Jenis Lomba tetap menjadi master dinamis. Admin dapat menambah, mengedit, dan menghapus jenis lomba beserta kriteria penilaiannya.
+- Total bobot kriteria setiap lomba wajib **tepat 100 poin**.
+- Input nilai mendukung **2 angka di belakang koma**.
+- Backup/restore tetap menggunakan database SQLite dan mencakup data peserta, nilai, user, penugasan juri, jenis lomba, kriteria, dan pengaturan.
+
+## Menjalankan di komputer lokal
+1. Pastikan **Node.js 20+** terpasang.
+2. Jalankan `START_SERVER.bat`.
+3. Buka `http://localhost:3000`.
+4. Login Admin default: `admin` / `admin123`.
+
+## Menjalankan dengan Ngrok
+1. Install **ngrok** dan pastikan perintah `ngrok version` dapat dijalankan dari CMD.
+2. Login/configure token Ngrok sekali pada komputer tersebut menggunakan perintah resmi Ngrok.
+3. Jalankan `START_NGROK.bat`.
+4. Jendela Ngrok akan menampilkan URL HTTPS publik, misalnya `https://xxxxx.ngrok-free.app`.
+5. Buka URL tersebut pada HP/laptop yang akan digunakan.
+6. Semua perangkat yang membuka URL yang sama akan menggunakan **database server yang sama** di komputer yang menjalankan aplikasi.
+
+### Catatan Ngrok
+- Jangan menutup jendela server atau jendela Ngrok selama kegiatan berlangsung.
+- Untuk keamanan kegiatan, gunakan password akun yang tidak mudah ditebak dan jangan membagikan akses Admin.
+- Jika server dipindahkan ke port lain, sesuaikan nilai `PORT` pada `START_NGROK.bat`.
+
+## Struktur data tingkat
+Empat tingkat yang tersedia secara bawaan:
+- `TEMU_MINGGU` — Temu Minggu
+- `SEKAMI` — Sekami
+- `TARUK` — Taruk
+- `OMK` — OMK
+
+Contoh penugasan: Juri 1 dapat menilai **Lagu dan Gerak – Temu Minggu, Sekami**, sementara Juri 2 menilai **Lagu dan Gerak – Taruk, OMK**. Hasil ranking setiap tingkat tetap berdiri sendiri.
+
+## Data lama V7
+Saat database lama pertama kali dibuka, peserta lama akan dianggap berada pada tingkat **Temu Minggu**. Penugasan juri lama dimigrasikan agar tetap memiliki penugasan pada empat tingkat, sehingga akun lama tidak langsung kehilangan akses.
+## Deploy gratis ke Render
+
+Paket ini sudah disiapkan agar dapat dideploy sebagai Web Service Node.js.
+
+1. Upload seluruh folder ke GitHub repository.
+2. Di Render pilih **New + → Web Service**, lalu hubungkan repository tersebut.
+3. Gunakan pengaturan:
+   - Runtime: **Node**
+   - Build Command: `npm install`
+   - Start Command: `npm start`
+   - Health Check Path: `/api/health`
+4. Tambahkan Environment Variable:
+   - `NODE_ENV=production`
+   - `SESSION_SECRET=` isi dengan teks acak yang panjang
+5. Deploy lalu buka URL yang diberikan Render.
+
+### Catatan penting tentang database
+
+Versi aplikasi ini memakai **SQLite** pada folder `server/database.sqlite`. Hosting gratis dengan filesystem ephemeral dapat menghapus perubahan database ketika service restart, redeploy, atau dipindahkan. Karena e-Juri menyimpan peserta, user, nilai, ranking, dan pengaturan di SQLite, gunakan fitur **Backup Database** secara berkala. Untuk penggunaan lomba yang membutuhkan penyimpanan permanen di cloud, langkah berikutnya adalah memindahkan database ke PostgreSQL/layanan database persisten atau menggunakan hosting dengan persistent disk.
+
+### Pengujian setelah online
+
+- Buka `/api/health` dan pastikan mendapat JSON `ok: true`.
+- Login Admin: `admin` / `admin123`.
+- Segera ganti password Admin dari menu **Juri & User**.
+- Buat akun Juri dan atur lomba + tingkatnya.
+- Uji input nilai, hasil/ranking, export, dan `/live`.
+
+
+services:
+  - type: web
+    name: e-juri-rewa-male
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: NODE_VERSION
+        value: 20
+
+const path = require('path');
+const http = require('http');
+const crypto = require('crypto');
+const fs = require('fs');
+const express = require('express');
+const session = require('express-session');
+const Database = require('better-sqlite3');
+const { Server } = require('socket.io');
+const ExcelJS = require('exceljs');
+const PDFDocument = require('pdfkit');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+const DATA_DIR = path.join(__dirname, 'server');
+fs.mkdirSync(DATA_DIR, { recursive: true });
+const db = new Database(path.join(DATA_DIR, 'database.sqlite'));
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+
+const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || '0.0.0.0';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'e-juri-rewa-male-local-secret-change-me';
+const SESSION_LEASE_MS = Number(process.env.SESSION_LEASE_MS || 180000);
+const LEVELS = [
+  {key:'TEMU_MINGGU', name:'Temu Minggu', code:'TM'},
+  {key:'SEKAMI', name:'Sekami', code:'SK'},
+  {key:'TARUK', name:'Taruk', code:'TR'},
+  {key:'OMK', name:'OMK', code:'OMK'}
+];
+const LEVEL_KEYS = LEVELS.map(x=>x.key);
+const LEVEL_NAME = Object.fromEntries(LEVELS.map(x=>[x.key,x.name]));
+const LEVEL_CODE = Object.fromEntries(LEVELS.map(x=>[x.key,x.code]));
+const CODE_LEVEL = Object.fromEntries(LEVELS.map(x=>[x.code,x.key]));
+
+const DEFAULT_LOMBA = {
+  lagu: { name:'Lomba Lagu dan Gerak', mode:'Kelompok', aspects:[['Vokal & kualitas suara',30],['Kekompakan kelompok',25],['Ketepatan lagu & lirik',15],['Gerak/koreografi & keserasian',20],['Ekspresi & penghayatan',10]] },
+  mazmur: { name:'Lomba Mazmur', mode:'Perseorangan', aspects:[['Ketepatan nada & melodi',25],['Artikulasi & kejelasan',20],['Irama & tempo',20],['Penghayatan Sabda',25],['Sikap liturgis & penampilan',10]] },
+  kitab: { name:'Lomba Lektor', mode:'Perseorangan', aspects:[['Ketepatan teks & pelafalan',25],['Artikulasi & intonasi',20],['Tempo & kelancaran',20],['Penghayatan isi Sabda',25],['Sikap & penampilan',10]] },
+  puisi: { name:'Lomba Puisi', mode:'Perseorangan', aspects:[['Penghayatan & ekspresi',25],['Artikulasi & vokal',20],['Intonasi & tempo',20],['Interpretasi makna',20],['Penampilan & kreativitas',15]] }
+};
+let L = {};
+const JURIES = [
+  ['L1','Juri 1','lagu'],['L2','Juri 2','lagu'],['L3','Juri 3','lagu'],
+  ['M1','Juri 1','mazmur'],['M2','Juri 2','mazmur'],['M3','Juri 3','mazmur'],
+  ['K1','Juri 1','kitab'],['K2','Juri 2','kitab'],['K3','Juri 3','kitab'],
+  ['U1','Juri 1','puisi'],['U2','Juri 2','puisi'],['U3','Juri 3','puisi']
+];
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+function verifyPassword(password, encoded) {
+  try {
+    const [salt, stored] = String(encoded).split(':');
+    const candidate = crypto.scryptSync(password, salt, 64).toString('hex');
+    return crypto.timingSafeEqual(Buffer.from(candidate,'hex'), Buffer.from(stored,'hex'));
+  } catch { return false; }
+}
+function now(){ return new Date().toISOString(); }
+function emitData(){ io.emit('data:update', {at: now()}); }
+
+
+const LEGACY_LOMBA_META = {
+  lagu: {prefix:'L', image:'lagu'},
+  mazmur: {prefix:'M', image:'mazmur'},
+  kitab: {prefix:'K', image:'lektor'},
+  puisi: {prefix:'U', image:'puisi-remaja'}
+};
+
+function slugifyLomba(name){
+  let key=String(name||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,28);
+  if(!key) key='lomba';
+  let base=key, i=2;
+  while(db.prepare('SELECT 1 FROM competitions WHERE lomba_key=?').get(key)){ key=`${base}_${i++}`; }
+  return key;
+}
+function competitionPrefix(lomba){
+  if(LEGACY_LOMBA_META[lomba]?.prefix) return LEGACY_LOMBA_META[lomba].prefix;
+  return String(lomba||'LOMBA').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8) || 'LOMBA';
+}
+function ensureDefaultCompetitions(){
+  const get=db.prepare('SELECT 1 FROM competitions WHERE lomba_key=?');
+  const add=db.prepare(`INSERT INTO competitions(lomba_key,name,mode,image,sort_order,locked,live,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`);
+  const addCriteria=db.prepare(`INSERT INTO competition_criteria(lomba_key,nama,poin,urut) VALUES(?,?,?,?)`);
+  const legacyLocks={
+    lagu:Number(db.prepare('SELECT lock_lagu FROM settings WHERE id=1').get()?.lock_lagu||0),
+    mazmur:Number(db.prepare('SELECT lock_mazmur FROM settings WHERE id=1').get()?.lock_mazmur||0),
+    kitab:Number(db.prepare('SELECT lock_kitab FROM settings WHERE id=1').get()?.lock_kitab||0),
+    puisi:Number(db.prepare('SELECT lock_puisi FROM settings WHERE id=1').get()?.lock_puisi||0)
+  };
+  const legacyLive={
+    lagu:Number(db.prepare('SELECT live_lagu FROM settings WHERE id=1').get()?.live_lagu||0),
+    mazmur:Number(db.prepare('SELECT live_mazmur FROM settings WHERE id=1').get()?.live_mazmur||0),
+    kitab:Number(db.prepare('SELECT live_kitab FROM settings WHERE id=1').get()?.live_kitab||0),
+    puisi:Number(db.prepare('SELECT live_puisi FROM settings WHERE id=1').get()?.live_puisi||0)
+  };
+  const tx=db.transaction(()=>{
+    Object.entries(DEFAULT_LOMBA).forEach(([key,v],idx)=>{
+      if(get.get(key)) return;
+      const meta=LEGACY_LOMBA_META[key]||{}; const t=now();
+      add.run(key,v.name,v.mode,meta.image||'',idx+1,legacyLocks[key]||0,legacyLive[key]||0,t,t);
+      v.aspects.forEach((a,i)=>addCriteria.run(key,a[0],Number(a[1]),i+1));
+    });
+  });
+  tx();
+}
+function loadLombaConfig(){
+  const rows=db.prepare(`SELECT c.lomba_key,c.name,c.mode,c.image,c.sort_order,c.locked,c.live,
+      cc.id criterion_id,cc.nama criterion_name,cc.poin criterion_points,cc.urut criterion_order
+    FROM competitions c LEFT JOIN competition_criteria cc ON cc.lomba_key=c.lomba_key
+    WHERE c.active=1
+    ORDER BY c.sort_order,c.created_at,cc.urut,cc.id`).all();
+  const next={};
+  for(const r of rows){
+    if(!next[r.lomba_key]) next[r.lomba_key]={name:r.name,mode:r.mode,aspects:[],image:r.image||'',locked:Number(r.locked||0),live:Number(r.live||0),sort_order:r.sort_order};
+    if(r.criterion_id) next[r.lomba_key].aspects.push([r.criterion_name,Number(r.criterion_points)]);
+  }
+  L=next;
+  return L;
+}
+function listLombaAdmin(){
+  return db.prepare(`SELECT c.lomba_key AS key,c.name,c.mode,c.image,c.active,c.sort_order,c.locked,c.live,
+    (SELECT COUNT(*) FROM competition_criteria x WHERE x.lomba_key=c.lomba_key) AS criteria_count,
+    (SELECT COUNT(*) FROM participants p WHERE p.lomba=c.lomba_key) AS participant_count,
+    (SELECT COUNT(DISTINCT ja.user_id) FROM jury_assignments ja JOIN users ju ON ju.id=ja.user_id WHERE ja.lomba=c.lomba_key AND ju.role='juri' AND ju.active=1) AS jury_count
+    FROM competitions c ORDER BY c.sort_order,c.created_at`).all();
+}
+function validateCriteria(aspects){
+  if(!Array.isArray(aspects) || !aspects.length) throw new Error('Minimal harus ada 1 kriteria penilaian.');
+  let total=0;
+  const clean=aspects.map((x,i)=>{
+    const name=String(x?.name??x?.[0]??'').trim();
+    const points=Number(x?.points??x?.[1]);
+    if(name.length<2 || name.length>120) throw new Error(`Nama kriteria ke-${i+1} harus 2-120 karakter.`);
+    if(!Number.isFinite(points) || points<=0 || points>100) throw new Error(`Poin kriteria ke-${i+1} harus lebih dari 0 dan maksimal 100.`);
+    total+=points;
+    return {name,points};
+  });
+  total=Math.round(total*100)/100;
+  if(total!==100) throw new Error(`Total poin seluruh kriteria harus tepat 100. Saat ini ${total}.`);
+  return clean;
+}
+
+function initDb() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS settings (
+      id INTEGER PRIMARY KEY CHECK(id=1),
+      nama_kegiatan TEXT NOT NULL DEFAULT 'E-Juri Rewa Male',
+      lingkungan_kub TEXT NOT NULL DEFAULT '',
+      tanggal TEXT DEFAULT '', tempat TEXT DEFAULT '', ketua_panitia TEXT DEFAULT '', catatan TEXT DEFAULT '',
+      locked INTEGER NOT NULL DEFAULT 0,
+      lock_lagu INTEGER NOT NULL DEFAULT 0,
+      lock_mazmur INTEGER NOT NULL DEFAULT 0,
+      lock_kitab INTEGER NOT NULL DEFAULT 0,
+      lock_puisi INTEGER NOT NULL DEFAULT 0,
+      live_lagu INTEGER NOT NULL DEFAULT 0,
+      live_mazmur INTEGER NOT NULL DEFAULT 0,
+      live_kitab INTEGER NOT NULL DEFAULT 0,
+      live_puisi INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      nama TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('admin','juri')),
+      jury_id TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      judge_no INTEGER,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS jury_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      lomba TEXT NOT NULL,
+      tingkat TEXT NOT NULL DEFAULT 'TEMU_MINGGU',
+      UNIQUE(user_id, lomba, tingkat)
+    );
+    CREATE TABLE IF NOT EXISTS competitions (
+      lomba_key TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      mode TEXT NOT NULL DEFAULT 'Perseorangan',
+      image TEXT DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      locked INTEGER NOT NULL DEFAULT 0,
+      live INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS competition_criteria (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lomba_key TEXT NOT NULL REFERENCES competitions(lomba_key) ON DELETE CASCADE,
+      nama TEXT NOT NULL,
+      poin REAL NOT NULL,
+      urut INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS participants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nomor_peserta TEXT UNIQUE NOT NULL,
+      nama_peserta TEXT NOT NULL,
+      lomba TEXT NOT NULL,
+      tingkat TEXT NOT NULL DEFAULT 'TEMU_MINGGU',
+      lingkungan_kub TEXT DEFAULT '',
+      urut_tampil INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS environments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nama TEXT UNIQUE NOT NULL,
+      aktif INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS scores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      participant_id INTEGER NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
+      jury_id TEXT NOT NULL,
+      values_json TEXT NOT NULL,
+      total REAL NOT NULL,
+      note TEXT DEFAULT '',
+      saved_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(participant_id, jury_id)
+    );
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      actor_user_id INTEGER,
+      action TEXT NOT NULL,
+      entity TEXT NOT NULL,
+      entity_id TEXT,
+      details TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS login_sessions (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      session_id TEXT UNIQUE NOT NULL,
+      device_id TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL
+    );
+  `);
+  const settingCols = db.prepare('PRAGMA table_info(settings)').all().map(x=>x.name);
+  if(!settingCols.includes('stasi_paroki')){
+    db.exec("ALTER TABLE settings ADD COLUMN stasi_paroki TEXT DEFAULT ''");
+    const old = db.prepare('SELECT lingkungan_kub FROM settings WHERE id=1').get();
+    if(old?.lingkungan_kub) db.prepare('UPDATE settings SET stasi_paroki=? WHERE id=1').run(old.lingkungan_kub);
+  }
+  for (const col of ['lock_lagu','lock_mazmur','lock_kitab','lock_puisi','live_lagu','live_mazmur','live_kitab','live_puisi']) {
+    if(!settingCols.includes(col)) db.exec(`ALTER TABLE settings ADD COLUMN ${col} INTEGER NOT NULL DEFAULT 0`);
+  }
+  const legacyLock=db.prepare('SELECT locked FROM settings WHERE id=1').get()?.locked;
+  if(legacyLock) db.prepare('UPDATE settings SET lock_lagu=1,lock_mazmur=1,lock_kitab=1,lock_puisi=1 WHERE id=1').run();
+  const participantCols = db.prepare('PRAGMA table_info(participants)').all().map(x=>x.name);
+  if(!participantCols.includes('tingkat')) db.exec("ALTER TABLE participants ADD COLUMN tingkat TEXT NOT NULL DEFAULT 'TEMU_MINGGU'");
+  const assignmentCols = db.prepare('PRAGMA table_info(jury_assignments)').all().map(x=>x.name);
+  if(!assignmentCols.includes('tingkat')){
+    db.exec('ALTER TABLE jury_assignments RENAME TO jury_assignments_legacy');
+    db.exec(`CREATE TABLE jury_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      lomba TEXT NOT NULL,
+      tingkat TEXT NOT NULL DEFAULT 'TEMU_MINGGU',
+      UNIQUE(user_id, lomba, tingkat)
+    )`);
+    const legacy=db.prepare('SELECT user_id,lomba FROM jury_assignments_legacy').all();
+    const addLegacy=db.prepare('INSERT OR IGNORE INTO jury_assignments(user_id,lomba,tingkat) VALUES(?,?,?)');
+    const txLegacy=db.transaction(()=>{
+      for(const row of legacy) for(const lv of LEVEL_KEYS) addLegacy.run(row.user_id,row.lomba,lv);
+    });
+    txLegacy();
+    db.exec('DROP TABLE jury_assignments_legacy');
+  }
+  const loginSessionCols = db.prepare('PRAGMA table_info(login_sessions)').all().map(x=>x.name);
+  if(!loginSessionCols.length){
+    db.exec(`CREATE TABLE IF NOT EXISTS login_sessions (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      session_id TEXT UNIQUE NOT NULL,
+      device_id TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL
+    )`);
+  }
+  const userCols = db.prepare('PRAGMA table_info(users)').all().map(x=>x.name);
+  if(!userCols.includes('judge_no')) db.exec('ALTER TABLE users ADD COLUMN judge_no INTEGER');
+  db.prepare("UPDATE users SET judge_no=CAST(substr(upper(COALESCE(jury_id,'')),-1) AS INTEGER) WHERE role='juri' AND judge_no IS NULL AND substr(upper(COALESCE(jury_id,'')),-1) IN ('1','2','3')").run();
+  db.prepare(`INSERT OR IGNORE INTO settings(id) VALUES(1)`).run();
+  ensureDefaultCompetitions();
+  loadLombaConfig();
+  seedEnvironmentsFromParticipants();
+  seedUsers();
+  seedJuryAssignments();
+}
+function normalizeLevelKeys(input, fallbackAll=false){
+  const raw=Array.isArray(input)?input:(input==null?[]:[input]);
+  const clean=[...new Set(raw.map(x=>String(x||'').trim().toUpperCase()).filter(k=>LEVEL_NAME[k]))];
+  return clean.length?clean:(fallbackAll?LEVEL_KEYS.slice():[]);
+}
+function normalizeJudgeAssignments(input, legacyLombas=[]){
+  const map=new Map();
+  const add=(lomba,levels)=>{if(!L[lomba]) return; const lv=normalizeLevelKeys(levels,true); if(!lv.length) return; const prev=map.get(lomba)||new Set(); lv.forEach(x=>prev.add(x)); map.set(lomba,prev);};
+  if(Array.isArray(input)){
+    for(const x of input){
+      if(typeof x==='string'){add(x,LEVEL_KEYS);continue;}
+      add(String(x?.lomba||''),x?.tingkat||x?.levels||x?.tingkats);
+    }
+  }else if(input && typeof input==='object'){
+    for(const [k,v] of Object.entries(input)) add(k,v);
+  }
+  if(!map.size && Array.isArray(legacyLombas)) legacyLombas.forEach(k=>add(String(k),LEVEL_KEYS));
+  return [...map.entries()].map(([lomba,levels])=>({lomba,tingkat:[...levels]}));
+}
+function getUserAssignments(userId){
+  return db.prepare(`SELECT ja.lomba,ja.tingkat,c.name AS lomba_name\n    FROM jury_assignments ja JOIN competitions c ON c.lomba_key=ja.lomba\n    WHERE ja.user_id=?\n    ORDER BY c.sort_order,c.created_at,ja.tingkat`).all(Number(userId)).map(x=>({lomba:x.lomba,tingkat:x.tingkat,name:x.lomba_name}));
+}
+function seedJuryAssignments(){
+  const add=db.prepare('INSERT OR IGNORE INTO jury_assignments(user_id,lomba,tingkat) VALUES(?,?,?)');
+  const rows=db.prepare("SELECT id,jury_id,judge_no,username FROM users WHERE role='juri'").all();
+  const map={L:'lagu',M:'mazmur',K:'kitab',U:'puisi'};
+  const occupied=new Set();
+  const hasAssignments=new Set(db.prepare('SELECT DISTINCT user_id FROM jury_assignments').all().map(x=>Number(x.user_id)));
+  const tx=db.transaction(()=>{
+    for(const u of rows){
+      if(hasAssignments.has(Number(u.id))) continue;
+      const jid=String(u.jury_id||'');
+      const k=map[jid.slice(0,1).toUpperCase()];
+      if(k && !jid.includes('_')){
+        for(const lv of LEVEL_KEYS){add.run(u.id,k,lv);occupied.add(`${Number(u.judge_no)}:${k}:${lv}`);}
+      }
+    }
+    // Akun generik juri1/juri2/juri3 tetap kompatibel pada instalasi lama/fresh install.
+    // Akun yang sudah mempunyai penugasan eksplisit tidak diubah.
+    for(const u of rows.filter(x=>!hasAssignments.has(Number(x.id)) && /^juri[1-3]$/i.test(String(x.username||'')))){
+      const no=Number(u.judge_no); if(![1,2,3].includes(no)) continue;
+      for(const k of Object.keys(L)) for(const lv of LEVEL_KEYS){
+        const seat=`${no}:${k}:${lv}`;
+        if(!occupied.has(seat)){add.run(u.id,k,lv);occupied.add(seat);}
+      }
+    }
+  });
+  tx();
+}
+function getAssignedLombaKeys(userId){
+  return [...new Set(db.prepare("SELECT lomba FROM jury_assignments WHERE user_id=? ORDER BY CASE lomba WHEN 'lagu' THEN 1 WHEN 'mazmur' THEN 2 WHEN 'kitab' THEN 3 WHEN 'puisi' THEN 4 ELSE 99 END").all(Number(userId)).map(x=>x.lomba).filter(k=>L[k]))];
+}
+function normalizeLombaKeys(input){
+  const raw=Array.isArray(input)?input:(input==null?[]:[input]);
+  return [...new Set(raw.map(x=>String(x||'').trim()).filter(k=>L[k]))];
+}
+function judgeAssignmentConflict(judgeNo,assignments,excludeUserId=null){
+  const q=db.prepare(`SELECT u.id,u.nama,ja.lomba,ja.tingkat FROM jury_assignments ja JOIN users u ON u.id=ja.user_id\n    WHERE ja.lomba=? AND ja.tingkat=? AND u.role='juri' AND u.judge_no=? AND u.active=1 AND u.id<>? LIMIT 1`);
+  for(const a of assignments){for(const lv of a.tingkat){const hit=q.get(a.lomba,lv,Number(judgeNo),Number(excludeUserId||0));if(hit)return hit;}}
+  return null;
+}
+function isJudgeAssigned(userId,lomba,tingkat){
+  return !!db.prepare("SELECT 1 FROM jury_assignments WHERE user_id=? AND lomba=? AND tingkat=? LIMIT 1").get(Number(userId),String(lomba||''),String(tingkat||''));
+}
+function userRowsWithAssignments(){
+  return db.prepare('SELECT id,username,nama,role,jury_id,judge_no,active,created_at FROM users ORDER BY role DESC,username').all().map(u=>{
+    const assignments=getUserAssignments(u.id);
+    const by={}; assignments.forEach(a=>(by[a.lomba] ||= []).push(a.tingkat));
+    return {...u,lombas:[...new Set(assignments.map(a=>a.lomba))],assignments:Object.entries(by).map(([lomba,tingkat])=>({lomba,tingkat,name:L[lomba]?.name||lomba}))};
+  });
+}
+function activeLoginSession(userId){
+  const row=db.prepare('SELECT * FROM login_sessions WHERE user_id=?').get(Number(userId));
+  if(!row) return null;
+  const age=Date.now()-Date.parse(row.last_seen_at||row.started_at);
+  if(!Number.isFinite(age) || age>SESSION_LEASE_MS){db.prepare('DELETE FROM login_sessions WHERE user_id=?').run(Number(userId));return null;}
+  return row;
+}
+function clearLoginSession(userId,sessionId=null){
+  if(sessionId) db.prepare('DELETE FROM login_sessions WHERE user_id=? AND session_id=?').run(Number(userId),String(sessionId));
+  else db.prepare('DELETE FROM login_sessions WHERE user_id=?').run(Number(userId));
+}
+function cleanupExpiredLoginSessions(){
+  const rows=db.prepare('SELECT user_id,last_seen_at,started_at FROM login_sessions').all();
+  const del=db.prepare('DELETE FROM login_sessions WHERE user_id=?');
+  for(const r of rows){const age=Date.now()-Date.parse(r.last_seen_at||r.started_at);if(!Number.isFinite(age)||age>SESSION_LEASE_MS)del.run(r.user_id);}
+}
+function getJudgeNo(req){ const saved=Number(req.session.user?.judge_no||0); if(Number.isInteger(saved)&&saved>=1) return saved; const u=String(req.session.user?.username||''); const m=u.match(/(\d+)$/); return m?Number(m[1]):null; }
+function juryIdFor(lomba,no,tingkat='TEMU_MINGGU'){
+  const n=Number(no); if(!Number.isInteger(n)||n<1) return null;
+  const prefix=competitionPrefix(lomba);
+  return `${prefix}${n}_${LEVEL_CODE[tingkat]||'LV'}`;
+}
+function legacyJuryIdFor(lomba,no){
+  const n=Number(no); if(!Number.isInteger(n)||n<1) return null; return `${competitionPrefix(lomba)}${n}`;
+}
+function scoreJuryLevel(juryId){
+  const m=String(juryId||'').match(/_([A-Z]+)$/); return CODE_LEVEL[m?.[1]]||null;
+}
+
+function seedEnvironmentsFromParticipants(){
+  const add=db.prepare('INSERT OR IGNORE INTO environments(nama,aktif,created_at,updated_at) VALUES(?,1,?,?)');
+  const rows=db.prepare("SELECT DISTINCT TRIM(lingkungan_kub) AS nama FROM participants WHERE TRIM(lingkungan_kub)<>''").all();
+  const t=now(); rows.forEach(r=>add.run(r.nama,t,t));
+}
+function listEnvironments(){
+  return db.prepare('SELECT id,nama,aktif,created_at,updated_at FROM environments ORDER BY aktif DESC,nama COLLATE NOCASE').all();
+}
+function seedUsers(){
+  const count=db.prepare('SELECT COUNT(*) c FROM users').get().c;
+  if(count) return;
+  const tx=db.transaction(()=>{
+    const add=db.prepare('INSERT INTO users(username,password_hash,nama,role,jury_id,active,judge_no,created_at) VALUES(?,?,?,?,?,1,?,?)');
+    add.run('admin',hashPassword('admin123'),'Administrator','admin',null,null,now());
+    const seeded=new Set();
+    for(const [jid,jname,lomba] of JURIES){
+      if(seeded.has(jid.toLowerCase())) continue; seeded.add(jid.toLowerCase());
+      const no=Number(jid.slice(-1)); add.run(jid.toLowerCase(),hashPassword('123456'),`${jname} ${L[lomba].name}`,'juri',jid,no,now());
+    }
+    add.run('juri1',hashPassword('123456'),'Juri 1','juri','J1',1,now());
+    add.run('juri2',hashPassword('123456'),'Juri 2','juri','J2',2,now());
+    add.run('juri3',hashPassword('123456'),'Juri 3','juri','J3',3,now());
+  });
+  tx();
+}
+function ensureJuryAliases(){
+  const ensure=db.prepare('SELECT id FROM users WHERE username=?');
+  const add=db.prepare('INSERT OR IGNORE INTO users(username,password_hash,nama,role,jury_id,active,judge_no,created_at) VALUES(?,?,?,?,?,1,?,?)');
+  for(const [username,nama,juryId] of [['juri1','Juri 1','J1'],['juri2','Juri 2','J2'],['juri3','Juri 3','J3']]) if(!ensure.get(username)) add.run(username,hashPassword('123456'),nama,'juri',juryId,Number(juryId.slice(-1)),now());
+  const legacy=[['l1','Juri 1 Lagu dan Gerak','L1'],['l2','Juri 2 Lagu dan Gerak','L2'],['l3','Juri 3 Lagu dan Gerak','L3'],['m1','Juri 1 Mazmur','M1'],['m2','Juri 2 Mazmur','M2'],['m3','Juri 3 Mazmur','M3'],['k1','Juri 1 Lektor','K1'],['k2','Juri 2 Lektor','K2'],['k3','Juri 3 Lektor','K3'],['u1','Juri 1 Puisi','U1'],['u2','Juri 2 Puisi','U2'],['u3','Juri 3 Puisi','U3']];
+  for(const [username,nama,juryId] of legacy) if(!ensure.get(username)) add.run(username,hashPassword('123456'),nama,'juri',juryId,Number(juryId.slice(-1)),now());
+}
+
+function audit(req,action,entity,entityId,details=''){
+  if(!req.session.user) return;
+  db.prepare('INSERT INTO audit_logs(actor_user_id,action,entity,entity_id,details,created_at) VALUES(?,?,?,?,?,?)').run(req.session.user.id,action,entity,String(entityId??''),details,now());
+}
+function requireAuth(req,res,next){return requireSession(req,res,next)}
+function requireAdmin(req,res,next){requireSession(req,res,()=>{if(req.session.user.role!=='admin') return res.status(403).json({error:'Akses admin diperlukan'});next()})}
+function requireJury(req,res,next){requireSession(req,res,()=>{if(req.session.user.role!=='juri') return res.status(403).json({error:'Akses juri diperlukan'});next()})}
+
+function getSettings(){
+  const s=db.prepare('SELECT * FROM settings WHERE id=1').get();
+  const locks={},live={};
+  db.prepare('SELECT lomba_key,locked,live FROM competitions WHERE active=1 ORDER BY sort_order,created_at').all().forEach(r=>{locks[r.lomba_key]=Number(r.locked||0);live[r.lomba_key]=Number(r.live||0);});
+  return {...s,stasi_paroki:s.stasi_paroki??s.lingkungan_kub??'',locks,live};
+}
+function isLombaLocked(lomba){ return !!getSettings().locks?.[lomba]; }
+
+function getParticipants(filters={}){
+  let sql = 'SELECT * FROM participants WHERE 1=1'; const p=[];
+  if(filters.lomba){sql+=' AND lomba=?';p.push(filters.lomba)}
+  if(filters.tingkat){sql+=' AND tingkat=?';p.push(filters.tingkat)}
+  if(filters.q){sql+=' AND (lower(nomor_peserta) LIKE lower(?) OR lower(nama_peserta) LIKE lower(?) OR lower(lingkungan_kub) LIKE lower(?))'; const q=`%${filters.q}%`;p.push(q,q,q)}
+  sql += ' ORDER BY tingkat, COALESCE(urut_tampil,999999), nomor_peserta';
+  return db.prepare(sql).all(...p);
+}
+function getScoresMap(){
+  const rows=db.prepare('SELECT * FROM scores').all();
+  const m=new Map();
+  for(const r of rows){let key=`${r.participant_id}:${r.jury_id}`;m.set(key,{id:r.id,values:JSON.parse(r.values_json),total:r.total,note:r.note,saved_at:r.saved_at,updated_at:r.updated_at});}
+  return m;
+}
+function results(lomba,tingkat='TEMU_MINGGU'){
+  const lv=LEVEL_NAME[tingkat]?tingkat:'TEMU_MINGGU';
+  const ps=db.prepare('SELECT * FROM participants WHERE lomba=? AND tingkat=? ORDER BY nomor_peserta').all(lomba,lv);
+  const j=assignedJuriesFor(lomba,lv);
+  const sm=getScoresMap();
+  return ps.map(p=>{
+    const vals=j.map(x=>{
+      const s=sm.get(`${p.id}:${x.id}`) || (lv==='TEMU_MINGGU' ? sm.get(`${p.id}:${legacyJuryIdFor(lomba,x.judge_no)}`) : null);
+      return s?.total ?? null;
+    });
+    const submitted=vals.filter(v=>v!==null).length;
+    const complete=j.length>0 && submitted===j.length;
+    const submittedTotal=vals.filter(v=>v!==null).reduce((a,b)=>a+b,0);
+    const total=complete?submittedTotal:null;
+    const averageSubmitted=submitted?submittedTotal/submitted:null;
+    return {...p,juries:j.map((x,i)=>({id:x.id,name:x.name,judge_no:x.judge_no,user_id:x.user_id,username:x.username,nama:x.nama,total:vals[i]})),submitted,complete,total,average:total===null?null:total/j.length,averageSubmitted};
+  }).sort((a,b)=>(b.averageSubmitted??-1)-(a.averageSubmitted??-1));
+}
+function assignedJuriesFor(lomba,tingkat='TEMU_MINGGU'){
+  const lv=LEVEL_NAME[tingkat]?tingkat:'TEMU_MINGGU';
+  const users=db.prepare(`SELECT u.id,u.username,u.nama,u.judge_no,u.jury_id,u.active,ja.tingkat\n    FROM jury_assignments ja JOIN users u ON u.id=ja.user_id\n    WHERE ja.lomba=? AND ja.tingkat IN (?, 'ALL') AND u.role='juri' AND u.active=1\n    ORDER BY u.judge_no ASC,u.id ASC`).all(lomba,lv);
+  return users.map(u=>({id:juryIdFor(lomba,Number(u.judge_no),lv),name:`Juri ${Number(u.judge_no)}`,judge_no:Number(u.judge_no),user_id:u.id,username:u.username,nama:u.nama,active:Number(u.active),tingkat:lv}));
+}
+function summary(){
+  const participants=db.prepare('SELECT * FROM participants').all();
+  const scoreRows=db.prepare('SELECT * FROM scores').all();
+  let complete=0;
+  const byParticipant = new Map();
+  for(const s of scoreRows){ if(!byParticipant.has(s.participant_id)) byParticipant.set(s.participant_id,new Map()); byParticipant.get(s.participant_id).set(s.jury_id,s); }
+  for(const p of participants){ const need=assignedJuriesFor(p.lomba,p.tingkat).length; const got=byParticipant.get(p.id)?.size||0; if(need>0 && got>=need) complete++; }
+  return {participants:participants.length, scoreEntries:scoreRows.length, completed:complete, completionPercent:participants.length?Math.round(complete/participants.length*100):0};
+}
+
+
+initDb();
+app.set('trust proxy', 1);
+app.use(express.json({limit:'2mb'}));
+app.use(express.urlencoded({extended:true}));
+app.use(session({secret:SESSION_SECRET,resave:false,saveUninitialized:false,cookie:{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production',maxAge:24*60*60*1000}}));
+
+app.get('/api/health',(req,res)=>res.json({ok:true,app:'e-juri-rewa-male',time:now()}));
+app.use(express.static(path.join(__dirname,'public')));
+
+function sessionUserPayload(u){return {id:u.id,username:u.username,nama:u.nama,role:u.role,jury_id:u.jury_id,judge_no:u.role==='juri'?(Number(u.judge_no)||null):null,lombas:u.role==='juri'?getAssignedLombaKeys(u.id):[],assignments:u.role==='juri'?getUserAssignments(u.id):[]};}
+function sessionAlive(req){
+  if(!req.session.user) return false;
+  const u=db.prepare('SELECT id,active FROM users WHERE id=?').get(Number(req.session.user.id));
+  if(!u?.active){clearLoginSession(req.session.user.id,req.sessionID);return false;}
+  const lease=activeLoginSession(req.session.user.id);
+  if(!lease || lease.session_id!==req.sessionID){return false;}
+  db.prepare('UPDATE login_sessions SET last_seen_at=? WHERE user_id=? AND session_id=?').run(now(),req.session.user.id,req.sessionID);
+  return true;
+}
+function requireSession(req,res,next){
+  cleanupExpiredLoginSessions();
+  if(!sessionAlive(req)) return res.status(401).json({error:'Sesi login sudah tidak aktif. Silakan login kembali.'});
+  next();
+}
+
+app.get('/api/session',(req,res)=>{
+  cleanupExpiredLoginSessions();
+  if(req.session.user && !sessionAlive(req)) return req.session.destroy(()=>res.json({user:null,settings:getSettings(),sessionLeaseMs:SESSION_LEASE_MS}));
+  res.json({user:req.session.user?{...req.session.user,lombas:getAssignedLombaKeys(req.session.user.id),assignments:getUserAssignments(req.session.user.id)}:null,settings:getSettings(),sessionLeaseMs:SESSION_LEASE_MS});
+});
+app.post('/api/login',(req,res)=>{
+  cleanupExpiredLoginSessions();
+  const {username,password,device_id=''}=req.body||{};
+  const u=db.prepare('SELECT * FROM users WHERE lower(username)=lower(?) AND active=1').get(String(username||'').trim());
+  if(!u || !verifyPassword(String(password||''),u.password_hash)) return res.status(401).json({error:'Username atau password salah'});
+  const existing=activeLoginSession(u.id);
+  if(existing && existing.session_id!==req.sessionID) return res.status(409).json({error:'Akun ini sedang aktif di perangkat lain. Logout terlebih dahulu dari perangkat yang sedang digunakan.'});
+  const finish=()=>{
+    const t=now();
+    db.prepare('INSERT INTO login_sessions(user_id,session_id,device_id,started_at,last_seen_at) VALUES(?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET session_id=excluded.session_id,device_id=excluded.device_id,started_at=excluded.started_at,last_seen_at=excluded.last_seen_at')
+      .run(u.id,req.sessionID,String(device_id||'browser'),t,t);
+    req.session.user=sessionUserPayload(u);
+    audit(req,'LOGIN','user',u.id,`Login satu-sesi; device=${String(device_id||'browser')}`);
+    res.json({user:req.session.user,settings:getSettings(),sessionLeaseMs:SESSION_LEASE_MS});
+  };
+  if(req.session.user && Number(req.session.user.id)===Number(u.id)) return finish();
+  req.session.regenerate(err=>{if(err)return res.status(500).json({error:'Gagal membuat sesi login'});finish();});
+});
+app.post('/api/logout',(req,res)=>{const uid=req.session.user?.id;const sid=req.sessionID;if(uid)clearLoginSession(uid,sid);req.session.destroy(()=>res.json({ok:true}));});
+app.post('/api/session/heartbeat',requireSession,(req,res)=>{res.json({ok:true,at:now(),expiresInMs:SESSION_LEASE_MS});});
+
+app.get('/api/settings',requireAuth,(req,res)=>res.json(getSettings()));
+app.put('/api/settings',requireAdmin,(req,res)=>{
+  const b=req.body||{};
+  db.prepare(`UPDATE settings SET nama_kegiatan=?, lingkungan_kub=?, stasi_paroki=?, tanggal=?, tempat=?, ketua_panitia=?, catatan=? WHERE id=1`)
+    .run(b.nama_kegiatan||'',b.lingkungan_kub||'',(b.stasi_paroki ?? b.lingkungan_kub ?? ''),b.tanggal||'',b.tempat||'',b.ketua_panitia||'',b.catatan||'');
+  audit(req,'UPDATE','settings',1,JSON.stringify(b)); emitData(); res.json(getSettings());
+});
+app.post('/api/settings/lock',requireAdmin,(req,res)=>{
+  const lomba=String(req.body?.lomba||'');
+  const locked=req.body?.locked?1:0;
+  if(!L[lomba]) return res.status(400).json({error:'Jenis lomba tidak valid.'});
+  db.prepare('UPDATE competitions SET locked=?,updated_at=? WHERE lomba_key=?').run(locked,now(),lomba);
+  audit(req,locked?'LOCK_LOMBA':'UNLOCK_LOMBA','competition',lomba,JSON.stringify({lomba,locked}));
+  emitData(); res.json(getSettings());
+});
+app.post('/api/settings/live',requireAdmin,(req,res)=>{
+  const lomba=String(req.body?.lomba||'');
+  const published=req.body?.published?1:0;
+  if(!L[lomba]) return res.status(400).json({error:'Jenis lomba tidak valid.'});
+  db.prepare('UPDATE competitions SET live=?,updated_at=? WHERE lomba_key=?').run(published,now(),lomba);
+  audit(req,published?'PUBLISH_LIVE':'UNPUBLISH_LIVE','competition',lomba,JSON.stringify({lomba,published}));
+  emitData(); res.json(getSettings());
+});
+
+function publicLiveRows(lomba,tingkat){
+  const rows=results(lomba,tingkat);
+  let rank=0;
+  return rows
+    .filter(x=>x.averageSubmitted!==null)
+    .map(x=>({
+      rank:++rank,
+      nomor_peserta:x.nomor_peserta,
+      nama_peserta:x.nama_peserta,
+      lingkungan_kub:x.lingkungan_kub||'',
+      submitted:x.submitted,
+      total_juri:x.juries.length,
+      average:Number(x.averageSubmitted.toFixed(2)),
+      status:x.complete?'FINAL':'LIVE'
+    }));
+}
+app.get('/api/public/live',(req,res)=>{
+  const s=getSettings();
+  const categories=Object.entries(L)
+    .filter(([k])=>s.live?.[k])
+    .map(([k,v])=>({key:k,name:v.name,mode:v.mode,levels:LEVELS.map(lv=>({key:lv.key,name:lv.name,rows:publicLiveRows(k,lv.key)}))}));
+  res.set('Cache-Control','no-store');
+  res.json({
+    published:categories.length>0,
+    event:{nama_kegiatan:s.nama_kegiatan||'E-Juri Rewa Male',stasi_paroki:s.stasi_paroki||'',tanggal:s.tanggal||'',tempat:s.tempat||'',catatan:s.catatan||''},
+    generated_at:now(),
+    categories
+  });
+});
+app.get('/live',(req,res)=>res.sendFile(path.join(__dirname,'public','live.html')));
+app.get('/api/users',requireAdmin,(req,res)=>res.json(userRowsWithAssignments()));
+app.post('/api/users',requireAdmin,(req,res)=>{
+  const b=req.body||{}; const username=String(b.username||'').trim().toLowerCase(); const nama=String(b.nama||'').trim(); const password=String(b.password||''); const role=b.role==='admin'?'admin':'juri';
+  const assignments=role==='juri'?normalizeJudgeAssignments(b.assignments,b.lombas):[];
+  if(!/^[a-z0-9._-]{3,30}$/.test(username)) return res.status(400).json({error:'Username 3-30 karakter: huruf, angka, titik, garis bawah atau strip.'});
+  if(!nama) return res.status(400).json({error:'Nama wajib diisi.'});
+  if(password.length<6) return res.status(400).json({error:'Password minimal 6 karakter.'});
+  let judgeNo=null,juryId=null;
+  if(role==='juri'){
+    judgeNo=Number(b.judge_no); if(!Number.isInteger(judgeNo)||judgeNo<1) return res.status(400).json({error:'Nomor juri harus bilangan bulat minimal 1.'});
+    if(!assignments.length) return res.status(400).json({error:'Pilih minimal satu lomba dan tingkat yang akan dinilai oleh juri.'});
+    const conflict=judgeAssignmentConflict(judgeNo,assignments); if(conflict) return res.status(409).json({error:`Juri ${judgeNo} untuk ${L[conflict.lomba].name} tingkat ${LEVEL_NAME[conflict.tingkat]||conflict.tingkat} sudah ditugaskan kepada ${conflict.nama}.`});
+    juryId=juryIdFor(assignments[0].lomba,judgeNo,assignments[0].tingkat[0]);
+  }
+  try{
+    const info=db.prepare('INSERT INTO users(username,password_hash,nama,role,jury_id,active,judge_no,created_at) VALUES(?,?,?,?,?,1,?,?)').run(username,hashPassword(password),nama,role,juryId,judgeNo,now());
+    if(role==='juri'){const add=db.prepare('INSERT INTO jury_assignments(user_id,lomba,tingkat) VALUES(?,?,?)');assignments.forEach(a=>a.tingkat.forEach(lv=>add.run(info.lastInsertRowid,a.lomba,lv)));}
+    const created=userRowsWithAssignments().find(x=>Number(x.id)===Number(info.lastInsertRowid));
+    audit(req,'CREATE','user',info.lastInsertRowid,JSON.stringify({username,role,judgeNo,assignments})); emitData(); res.status(201).json({ok:true,user:created});
+  }catch(e){return res.status(400).json({error:e.code?.includes('UNIQUE')?'Username sudah digunakan.':'Gagal membuat user: '+e.message});}
+});
+app.put('/api/users/:id',requireAdmin,(req,res)=>{
+  const id=Number(req.params.id); const u=db.prepare('SELECT * FROM users WHERE id=?').get(id); if(!u) return res.status(404).json({error:'User tidak ditemukan.'});
+  const b=req.body||{}; const username=String(b.username??u.username).trim().toLowerCase(); const nama=String(b.nama??u.nama).trim(); const active=b.active===undefined?u.active:(b.active?1:0); const password=String(b.password||''); const role=b.role?String(b.role):u.role; const assignments=role==='juri'?normalizeJudgeAssignments(b.assignments,b.lombas):[];
+  if(!/^[a-z0-9._-]{3,30}$/.test(username)) return res.status(400).json({error:'Username tidak valid.'});
+  if(!nama) return res.status(400).json({error:'Nama wajib diisi.'});
+  let judgeNo=null,juryId=null;
+  if(role==='juri'){
+    judgeNo=Number(b.judge_no??u.judge_no); if(!Number.isInteger(judgeNo)||judgeNo<1) return res.status(400).json({error:'Nomor juri harus bilangan bulat minimal 1.'});
+    if(!assignments.length) return res.status(400).json({error:'Pilih minimal satu lomba dan tingkat yang akan dinilai oleh juri.'});
+    if(active){const conflict=judgeAssignmentConflict(judgeNo,assignments,id);if(conflict)return res.status(409).json({error:`Juri ${judgeNo} untuk ${L[conflict.lomba].name} tingkat ${LEVEL_NAME[conflict.tingkat]||conflict.tingkat} sudah ditugaskan kepada ${conflict.nama}.`});}
+    juryId=juryIdFor(assignments[0].lomba,judgeNo,assignments[0].tingkat[0])||`J${judgeNo}`;
+  }
+  if(role==='admin' && u.id===req.session.user.id && !active) return res.status(400).json({error:'Admin yang sedang login tidak dapat dinonaktifkan.'});
+  if(password && password.length<6) return res.status(400).json({error:'Password minimal 6 karakter.'});
+  try{
+    const fields=['username=?','nama=?','role=?','active=?']; const vals=[username,nama,role,active]; fields.push('jury_id=?','judge_no=?'); vals.push(juryId,judgeNo); if(password){fields.push('password_hash=?');vals.push(hashPassword(password));} vals.push(id);
+    const tx=db.transaction(()=>{db.prepare(`UPDATE users SET ${fields.join(',')} WHERE id=?`).run(...vals);db.prepare('DELETE FROM jury_assignments WHERE user_id=?').run(id);if(role==='juri'){const add=db.prepare('INSERT INTO jury_assignments(user_id,lomba,tingkat) VALUES(?,?,?)');assignments.forEach(a=>a.tingkat.forEach(lv=>add.run(id,a.lomba,lv)));} if(!active) clearLoginSession(id);}); tx();
+    audit(req,'UPDATE','user',id,JSON.stringify({username,role,judgeNo,assignments,active})); emitData(); res.json({ok:true,user:userRowsWithAssignments().find(x=>Number(x.id)===id)});
+  }catch(e){return res.status(400).json({error:e.code?.includes('UNIQUE')?'Username sudah digunakan.':'Gagal memperbarui user: '+e.message});}
+});
+app.delete('/api/users/:id',requireAdmin,(req,res)=>{
+  const id=Number(req.params.id); const u=db.prepare('SELECT * FROM users WHERE id=?').get(id); if(!u) return res.status(404).json({error:'User tidak ditemukan.'});
+  if(u.id===req.session.user.id) return res.status(400).json({error:'Anda tidak dapat menghapus akun sendiri.'});
+  if(u.role==='admin'){const c=db.prepare("SELECT COUNT(*) c FROM users WHERE role='admin' AND active=1").get().c;if(c<=1)return res.status(400).json({error:'Tidak dapat menghapus satu-satunya admin aktif.'});}
+  clearLoginSession(id); db.prepare('DELETE FROM users WHERE id=?').run(id); audit(req,'DELETE','user',id,u.username); emitData(); res.json({ok:true});
+});
+app.get('/api/lomba',requireAuth,(req,res)=>{
+  res.json(Object.fromEntries(Object.entries(L).map(([k,v])=>{const map=new Map(); for(const lv of LEVEL_KEYS){for(const j of assignedJuriesFor(k,lv)) map.set(j.judge_no,j);} return [k,{name:v.name,mode:v.mode,aspects:v.aspects,image:v.image||'',locked:!!v.locked,live:!!v.live,juries:[...map.values()]}]})));
+});
+app.get('/api/lomba-admin',requireAdmin,(req,res)=>res.json(listLombaAdmin()));
+app.post('/api/lomba',requireAdmin,(req,res)=>{
+  const b=req.body||{}; const name=String(b.name||'').trim(); const mode=String(b.mode||'Perseorangan').trim(); const image=String(b.image||'').trim();
+  if(name.length<2||name.length>120) return res.status(400).json({error:'Nama jenis lomba harus 2-120 karakter.'});
+  if(mode.length<2||mode.length>50) return res.status(400).json({error:'Mode peserta harus 2-50 karakter.'});
+  let criteria; try{criteria=validateCriteria(b.criteria);}catch(e){return res.status(400).json({error:e.message});}
+  try{
+    const key=slugifyLomba(name); const maxOrder=db.prepare('SELECT COALESCE(MAX(sort_order),0) m FROM competitions').get().m; const t=now();
+    db.prepare('INSERT INTO competitions(lomba_key,name,mode,image,active,sort_order,locked,live,created_at,updated_at) VALUES(?,?,?, ?,1,?,0,0,?,?)').run(key,name,mode,image,Number(maxOrder)+1,t,t);
+    const add=db.prepare('INSERT INTO competition_criteria(lomba_key,nama,poin,urut) VALUES(?,?,?,?)'); criteria.forEach((c,i)=>add.run(key,c.name,c.points,i+1));
+    audit(req,'CREATE','competition',key,JSON.stringify({name,mode,criteria})); loadLombaConfig(); emitData();
+    res.status(201).json({ok:true,lomba:{key,...L[key]}});
+  }catch(e){res.status(400).json({error:'Gagal membuat jenis lomba: '+e.message});}
+});
+app.put('/api/lomba/:key',requireAdmin,(req,res)=>{
+  const key=String(req.params.key||''); const current=db.prepare('SELECT * FROM competitions WHERE lomba_key=?').get(key); if(!current)return res.status(404).json({error:'Jenis lomba tidak ditemukan.'});
+  const b=req.body||{}; const name=String(b.name??current.name).trim(); const mode=String(b.mode??current.mode).trim(); const image=String(b.image??current.image??'').trim();
+  if(name.length<2||name.length>120) return res.status(400).json({error:'Nama jenis lomba harus 2-120 karakter.'});
+  if(mode.length<2||mode.length>50) return res.status(400).json({error:'Mode peserta harus 2-50 karakter.'});
+  let criteria; try{criteria=validateCriteria(b.criteria);}catch(e){return res.status(400).json({error:e.message});}
+  const scoreCount=Number(db.prepare(`SELECT COUNT(*) c FROM scores s JOIN participants p ON p.id=s.participant_id WHERE p.lomba=?`).get(key).c||0);
+  const oldCriteria=db.prepare('SELECT nama,poin FROM competition_criteria WHERE lomba_key=? ORDER BY urut,id').all(key).map(x=>({name:x.nama,points:Number(x.poin)}));
+  if(scoreCount>0 && JSON.stringify(oldCriteria)!==JSON.stringify(criteria)) return res.status(400).json({error:`Kriteria tidak dapat diubah karena sudah ada ${scoreCount} input nilai. Hapus data nilai lomba tersebut terlebih dahulu agar riwayat nilai tidak berubah arti.`});
+  try{
+    const tx=db.transaction(()=>{
+      db.prepare('UPDATE competitions SET name=?,mode=?,image=?,updated_at=? WHERE lomba_key=?').run(name,mode,image,now(),key);
+      db.prepare('DELETE FROM competition_criteria WHERE lomba_key=?').run(key);
+      const add=db.prepare('INSERT INTO competition_criteria(lomba_key,nama,poin,urut) VALUES(?,?,?,?)'); criteria.forEach((c,i)=>add.run(key,c.name,c.points,i+1));
+    });
+    tx(); audit(req,'UPDATE','competition',key,JSON.stringify({name,mode,criteria})); loadLombaConfig(); emitData(); res.json({ok:true,lomba:{key,...L[key]}});
+  }catch(e){res.status(400).json({error:'Gagal memperbarui jenis lomba: '+e.message});}
+});
+app.delete('/api/lomba/:key',requireAdmin,(req,res)=>{
+  const key=String(req.params.key||''); const c=db.prepare('SELECT * FROM competitions WHERE lomba_key=?').get(key); if(!c)return res.status(404).json({error:'Jenis lomba tidak ditemukan.'});
+  const peserta=db.prepare('SELECT COUNT(*) c FROM participants WHERE lomba=?').get(key).c; const nilai=db.prepare(`SELECT COUNT(*) c FROM scores s JOIN participants p ON p.id=s.participant_id WHERE p.lomba=?`).get(key).c; const jur=db.prepare('SELECT COUNT(*) c FROM jury_assignments WHERE lomba=?').get(key).c;
+  if(peserta||nilai||jur) return res.status(400).json({error:`Jenis lomba tidak dapat dihapus karena masih memiliki ${peserta} peserta, ${nilai} nilai, dan ${jur} penugasan juri. Hapus data terkait terlebih dahulu.`});
+  db.prepare('DELETE FROM competitions WHERE lomba_key=?').run(key); audit(req,'DELETE','competition',key,c.name); loadLombaConfig(); emitData(); res.json({ok:true});
+});
+app.get('/api/environments',requireAuth,(req,res)=>res.json(listEnvironments()));
+app.post('/api/environments',requireAdmin,(req,res)=>{
+  const nama=String(req.body?.nama||'').trim().replace(/\s+/g,' ');
+  if(nama.length<2||nama.length>100) return res.status(400).json({error:'Nama Lingkungan/KUB harus 2-100 karakter.'});
+  const t=now();
+  try{ const r=db.prepare('INSERT INTO environments(nama,aktif,created_at,updated_at) VALUES(?,1,?,?)').run(nama,t,t); audit(req,'CREATE','environment',r.lastInsertRowid,nama); emitData(); res.status(201).json({id:r.lastInsertRowid,nama,aktif:1}); }catch(e){res.status(400).json({error:e.message.includes('UNIQUE')?'Lingkungan/KUB sudah ada.':'Gagal menambah Lingkungan/KUB.'});}
+});
+app.put('/api/environments/:id',requireAdmin,(req,res)=>{
+  const id=Number(req.params.id), row=db.prepare('SELECT * FROM environments WHERE id=?').get(id); if(!row)return res.status(404).json({error:'Lingkungan/KUB tidak ditemukan.'});
+  const nama=String(req.body?.nama??row.nama).trim().replace(/\s+/g,' '); const aktif=req.body?.aktif===undefined?row.aktif:(req.body.aktif?1:0);
+  if(nama.length<2||nama.length>100) return res.status(400).json({error:'Nama Lingkungan/KUB harus 2-100 karakter.'});
+  try{db.prepare('UPDATE environments SET nama=?,aktif=?,updated_at=? WHERE id=?').run(nama,aktif,now(),id); audit(req,'UPDATE','environment',id,JSON.stringify({nama,aktif})); emitData(); res.json({ok:true});}catch(e){res.status(400).json({error:e.message.includes('UNIQUE')?'Lingkungan/KUB sudah ada.':'Gagal memperbarui Lingkungan/KUB.'});}
+});
+app.delete('/api/environments/:id',requireAdmin,(req,res)=>{
+  const id=Number(req.params.id), row=db.prepare('SELECT * FROM environments WHERE id=?').get(id); if(!row)return res.status(404).json({error:'Lingkungan/KUB tidak ditemukan.'});
+  const used=db.prepare('SELECT COUNT(*) c FROM participants WHERE lingkungan_kub=?').get(row.nama).c; if(used>0) return res.status(400).json({error:`Lingkungan/KUB masih dipakai oleh ${used} peserta. Nonaktifkan saja agar data peserta tetap aman.`});
+  db.prepare('DELETE FROM environments WHERE id=?').run(id); audit(req,'DELETE','environment',id,row.nama); emitData(); res.json({ok:true});
+});
+app.get('/api/participants',requireAuth,(req,res)=>res.json(getParticipants({lomba:req.query.lomba,tingkat:req.query.tingkat,q:req.query.q})));
+app.post('/api/participants',requireAdmin,(req,res)=>{
+  if(getSettings().locked) return res.status(423).json({error:'Penilaian sedang dikunci'});
+  const b=req.body||{}; if(!b.nomor_peserta||!b.nama_peserta||!L[b.lomba]) return res.status(400).json({error:'Data peserta tidak lengkap'});
+  const tingkat=String(b.tingkat||'').toUpperCase(); if(!LEVEL_NAME[tingkat]) return res.status(400).json({error:'Tingkat peserta harus Temu Minggu, Sekami, Taruk, atau OMK.'});
+  try{
+    const lingkungan=String(b.lingkungan_kub||'').trim();
+    if(lingkungan && !db.prepare('SELECT 1 FROM environments WHERE nama=? AND aktif=1').get(lingkungan)) return res.status(400).json({error:'Lingkungan/KUB belum terdaftar atau sedang nonaktif.'});
+    const r=db.prepare(`INSERT INTO participants(nomor_peserta,nama_peserta,lomba,tingkat,lingkungan_kub,urut_tampil,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)`)
+      .run(String(b.nomor_peserta).trim(),String(b.nama_peserta).trim(),b.lomba,tingkat,lingkungan,b.urut_tampil?Number(b.urut_tampil):null,now(),now());
+    audit(req,'CREATE','participant',r.lastInsertRowid); emitData(); res.json({id:r.lastInsertRowid});
+  }catch(e){res.status(400).json({error:e.message.includes('UNIQUE')?'Nomor peserta sudah digunakan':e.message})}
+});
+app.put('/api/participants/:id',requireAdmin,(req,res)=>{
+  if(getSettings().locked) return res.status(423).json({error:'Penilaian sedang dikunci'});
+  const id=Number(req.params.id), b=req.body||{}; const p=db.prepare('SELECT * FROM participants WHERE id=?').get(id); if(!p) return res.status(404).json({error:'Peserta tidak ditemukan'});
+  if(!b.nomor_peserta||!b.nama_peserta||!L[b.lomba]) return res.status(400).json({error:'Data peserta tidak lengkap'});
+  const tingkat=String(b.tingkat||p.tingkat||'TEMU_MINGGU').toUpperCase(); if(!LEVEL_NAME[tingkat]) return res.status(400).json({error:'Tingkat peserta harus Temu Minggu, Sekami, Taruk, atau OMK.'});
+  try{const lingkungan=String(b.lingkungan_kub||'').trim(); if(lingkungan && !db.prepare('SELECT 1 FROM environments WHERE nama=? AND aktif=1').get(lingkungan)) return res.status(400).json({error:'Lingkungan/KUB belum terdaftar atau sedang nonaktif.'}); db.prepare(`UPDATE participants SET nomor_peserta=?,nama_peserta=?,lomba=?,tingkat=?,lingkungan_kub=?,urut_tampil=?,updated_at=? WHERE id=?`).run(String(b.nomor_peserta).trim(),String(b.nama_peserta).trim(),b.lomba,tingkat,lingkungan,b.urut_tampil?Number(b.urut_tampil):null,now(),id); audit(req,'UPDATE','participant',id); emitData();res.json({ok:true})}catch(e){res.status(400).json({error:e.message.includes('UNIQUE')?'Nomor peserta sudah digunakan':e.message})}
+});
+app.delete('/api/participants/:id',requireAdmin,(req,res)=>{
+  if(getSettings().locked) return res.status(423).json({error:'Penilaian sedang dikunci'});
+  const id=Number(req.params.id); db.prepare('DELETE FROM participants WHERE id=?').run(id); audit(req,'DELETE','participant',id); emitData(); res.json({ok:true});
+});
+
+app.get('/api/criteria/:lomba',requireAuth,(req,res)=>{const x=L[req.params.lomba]; if(!x)return res.status(404).json({error:'Lomba tidak ditemukan'});res.json(x.aspects)});
+app.get('/api/scores',requireAuth,(req,res)=>{
+  const rows=db.prepare(`SELECT s.*,p.nomor_peserta,p.nama_peserta,p.lomba,p.tingkat,p.lingkungan_kub FROM scores s JOIN participants p ON p.id=s.participant_id ORDER BY s.updated_at DESC`).all();
+  res.json(rows.map(x=>({...x,values:JSON.parse(x.values_json)})));
+});
+app.post('/api/scores',requireJury,(req,res)=>{
+  const {participant_id,values,note=''}=req.body||{}; const p=db.prepare('SELECT * FROM participants WHERE id=?').get(Number(participant_id));
+  if(!p)return res.status(404).json({error:'Peserta tidak ditemukan'});
+  if(isLombaLocked(p.lomba)) return res.status(423).json({error:`Penilaian ${L[p.lomba].name} sedang dikunci oleh admin`});
+  if(!isJudgeAssigned(req.session.user.id,p.lomba,p.tingkat)) return res.status(403).json({error:`Akun Anda tidak ditugaskan untuk ${L[p.lomba].name} pada tingkat ${LEVEL_NAME[p.tingkat]||p.tingkat}.`});
+  const judgeNo=Number(req.session.user.judge_no||getJudgeNo(req)); const targetJuryId=juryIdFor(p.lomba,judgeNo,p.tingkat);
+  if(!targetJuryId)return res.status(403).json({error:'Akun juri tidak valid'});
+  if(!Array.isArray(values)||values.length!==L[p.lomba].aspects.length)return res.status(400).json({error:'Komponen nilai tidak lengkap'});
+  const clean=values.map((v,i)=>Number(v)); const max=L[p.lomba].aspects.map(x=>x[1]); if(clean.some((v,i)=>!Number.isFinite(v)||v<0||v>max[i])) return res.status(400).json({error:'Ada nilai di luar batas bobot'});
+  const rounded=clean.map(v=>Math.round(v*100)/100); const total=Math.round(rounded.reduce((a,b)=>a+b,0)*100)/100; const t=now();
+  db.prepare(`INSERT INTO scores(participant_id,jury_id,values_json,total,note,saved_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(participant_id,jury_id) DO UPDATE SET values_json=excluded.values_json,total=excluded.total,note=excluded.note,updated_at=excluded.updated_at`)
+    .run(Number(participant_id),targetJuryId,JSON.stringify(rounded),total,String(note||''),t,t);
+  audit(req,'UPSERT','score',`${participant_id}:${targetJuryId}`); emitData(); res.json({ok:true,total});
+});
+app.delete('/api/scores/:id',requireAdmin,(req,res)=>{db.prepare('DELETE FROM scores WHERE id=?').run(Number(req.params.id));audit(req,'DELETE','score',req.params.id);emitData();res.json({ok:true})});
+
+app.get('/api/results/:lomba',requireAdmin,(req,res)=>{
+  if(!L[req.params.lomba]) return res.status(404).json({error:'Lomba tidak ditemukan'});
+  const tingkat=String(req.query.tingkat||'TEMU_MINGGU').toUpperCase(); if(!LEVEL_NAME[tingkat]) return res.status(400).json({error:'Tingkat tidak valid'});
+  const rows=results(req.params.lomba,tingkat);
+  const liveRows=rows.filter(x=>x.averageSubmitted!==null);
+  const liveRank=new Map(liveRows.map((x,i)=>[x.id,i+1]));
+  res.json(rows.map(x=>({...x,rank:x.complete?liveRank.get(x.id):null,rankLive:x.averageSubmitted===null?null:liveRank.get(x.id)})));
+});
+function activeJudgeNumbers(){
+  return db.prepare(`SELECT DISTINCT judge_no FROM users WHERE role='juri' AND active=1 AND judge_no>=1 ORDER BY judge_no`).all().map(x=>Number(x.judge_no));
+}
+function scoreJudgeNo(juryId){
+  const m=String(juryId||'').match(/(\d+)$/);
+  return m?Number(m[1]):null;
+}
+
+app.get('/api/score-recap',requireAdmin,(req,res)=>{
+  res.json(scoreRecapRows(req.query.q||'',String(req.query.tingkat||'').toUpperCase()));
+});
+
+app.get('/api/user-results',requireAuth,(req,res)=>{
+  const tingkat=String(req.query.tingkat||'').toUpperCase();
+  if(req.session.user?.role==='juri'){
+    return res.json(userResultRows({userId:req.session.user.id,q:req.query.q||'',tingkat}));
+  }
+  res.json(userResultRows({userId:req.query.userId||'',q:req.query.q||'',tingkat}));
+});
+
+app.get('/api/dashboard',requireAuth,(req,res)=>{
+  const s=summary(); const byLomba=Object.keys(L).map(k=>{const levels=LEVELS.map(lv=>{const r=results(k,lv.key);return {key:lv.key,name:lv.name,peserta:r.length,selesai:r.filter(x=>x.complete).length,input:r.reduce((n,x)=>n+x.submitted,0)}});return {lomba:k,nama:L[k].name,peserta:levels.reduce((n,x)=>n+x.peserta,0),selesai:levels.reduce((n,x)=>n+x.selesai,0),input:levels.reduce((n,x)=>n+x.input,0),levels};}); const liveByLomba=Object.fromEntries(Object.keys(L).map(k=>[k,Object.fromEntries(LEVELS.map(lv=>[lv.key,results(k,lv.key).map((x,i)=>({...x,rankLive:x.averageSubmitted===null?null:i+1})).slice(0,50)]))])); const users=db.prepare("SELECT COUNT(*) c FROM users WHERE role='juri' AND active=1").get().c; res.json({...s,activeJuries:users,byLomba,liveByLomba});
+});
+app.get('/api/audit',requireAdmin,(req,res)=>res.json(db.prepare(`SELECT a.*,u.username,u.nama FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_user_id ORDER BY a.id DESC LIMIT 500`).all()));
+app.get('/api/backup',requireAdmin,async (req,res)=>{
+  const tmp=path.join(DATA_DIR,`backup-${Date.now()}.sqlite`);
+  try{
+    await db.backup(tmp);
+    res.download(tmp,'e-juri-rewa-male-backup.sqlite',()=>{fs.rm(tmp,{force:true},()=>{});});
+  }catch(e){fs.rm(tmp,{force:true},()=>{});res.status(500).json({error:'Backup database gagal'});}
+});
+app.post('/api/restore',requireAdmin,express.raw({type:'application/octet-stream',limit:'50mb'}),(req,res)=>{
+  const tmp=path.join(DATA_DIR,`restore-${Date.now()}.sqlite`);
+  try{
+    if(!req.body || !Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({error:'File backup kosong'});
+    fs.writeFileSync(tmp,req.body);
+    const escaped=tmp.replace(/'/g,"''");
+    db.exec(`ATTACH DATABASE '${escaped}' AS restoredb`);
+    const check=db.prepare('PRAGMA restoredb.integrity_check').get();
+    if(!check || !String(Object.values(check)[0]).toLowerCase().includes('ok')) throw new Error('Database backup tidak valid');
+    const tables=['settings','users','participants','scores','audit_logs','environments','jury_assignments','competitions','competition_criteria'];
+    const getCols=(schema,t)=>db.prepare(`PRAGMA ${schema}.table_info(${t})`).all().map(x=>x.name);
+    const commonCols=(t)=>{
+      const src=getCols('restoredb',t);
+      const dst=getCols('main',t);
+      return dst.filter(c=>src.includes(c));
+    };
+    const tx=db.transaction(()=>{
+      db.exec('PRAGMA foreign_keys=OFF');
+      for(const t of tables){
+        const cols=commonCols(t);
+        if(!cols.length) continue;
+        db.exec(`DELETE FROM main.${t}`);
+        const q=cols.map(c=>'\"'+c.replace(/\"/g,'\"\"')+'\"').join(',');
+        db.exec(`INSERT INTO main.${t} (${q}) SELECT ${q} FROM restoredb.${t}`);
+      }
+      db.exec('PRAGMA foreign_keys=ON');
+    });
+    tx();
+    // Pastikan schema baru tetap terisi setelah restore backup lama.
+    const restoredSetting=db.prepare('SELECT id FROM settings WHERE id=1').get();
+    if(!restoredSetting) db.prepare('INSERT OR IGNORE INTO settings(id) VALUES(1)').run();
+    const settingCols2=db.prepare('PRAGMA table_info(settings)').all().map(x=>x.name);
+    if(settingCols2.includes('stasi_paroki')){
+      const sp=db.prepare('SELECT stasi_paroki FROM settings WHERE id=1').get();
+      if(sp && !sp.stasi_paroki){
+        const old=db.prepare('SELECT lingkungan_kub FROM settings WHERE id=1').get();
+        if(old?.lingkungan_kub) db.prepare('UPDATE settings SET stasi_paroki=? WHERE id=1').run(old.lingkungan_kub);
+      }
+    }
+    db.exec('DETACH DATABASE restoredb');
+    fs.rmSync(tmp,{force:true});
+    ensureDefaultCompetitions();
+    loadLombaConfig();
+    seedEnvironmentsFromParticipants();
+    seedJuryAssignments();
+    audit(req,'RESTORE','all','1','Restore database dari backup');
+    emitData();
+    res.json({ok:true});
+  }catch(e){
+    try{db.exec('DETACH DATABASE restoredb')}catch{}
+    fs.rmSync(tmp,{force:true});
+    res.status(400).json({error:`Restore gagal: ${e.message}`});
+  }
+});
+app.post('/api/reset',requireAdmin,(req,res)=>{
+  const {confirmText}=req.body||{}; if(confirmText!=='RESET E-JURI') return res.status(400).json({error:'Konfirmasi reset salah'});
+  const tx=db.transaction(()=>{db.prepare('DELETE FROM login_sessions').run();db.prepare('DELETE FROM scores').run();db.prepare('DELETE FROM participants').run();db.prepare('DELETE FROM environments').run();db.prepare("DELETE FROM users WHERE role='juri'").run();db.prepare('DELETE FROM audit_logs').run();db.prepare('UPDATE settings SET locked=0,lock_lagu=0,lock_mazmur=0,lock_kitab=0,lock_puisi=0,live_lagu=0,live_mazmur=0,live_kitab=0,live_puisi=0 WHERE id=1').run();db.prepare('UPDATE competitions SET locked=0,live=0,updated_at=?').run(now());}); tx(); seedJuryAssignments(); loadLombaConfig();audit(req,'RESET','all','1','Reset data perlombaan');emitData();res.json({ok:true});
+});
+
+function resultRowsFor(lomba,tingkat='TEMU_MINGGU'){
+  if(!L[lomba]) return [];
+  const lv=LEVEL_NAME[tingkat]?tingkat:'TEMU_MINGGU'; const rows=results(lomba,lv); let rank=0;
+  const orderedJuries=assignedJuriesFor(lomba,lv);
+  return rows.map((x)=>{
+    const hasScore=x.averageSubmitted!==null; if(hasScore) rank++;
+    const row={rank:hasScore?rank:'',nomor_peserta:x.nomor_peserta,nama_peserta:x.nama_peserta,lingkungan_kub:x.lingkungan_kub||'',submitted:x.submitted,juryCount:x.juries.length,average:x.averageSubmitted===null?'':Number(x.averageSubmitted),status:x.complete?'FINAL':`${x.submitted}/${x.juries.length} JURI`};
+    orderedJuries.forEach((j,i)=>{row[`j${j.judge_no}`]=x.juries[i]?.total??'';});
+    return row;
+  });
+}
+function dashboardRows(){
+  return Object.keys(L).flatMap(k=>LEVELS.map(lv=>{const r=results(k,lv.key);return {
+    lomba:L[k].name,tingkat:lv.name,peserta:r.length,penilaian:r.reduce((n,x)=>n+x.submitted,0),
+    peserta_lengkap:r.filter(x=>x.complete).length,
+    ranking_aktif:r.filter(x=>x.averageSubmitted!==null).length
+  }}));
+}
+function participantRows(){
+  return getParticipants({lomba:String(arguments[0]||''),tingkat:String(arguments[1]||'').toUpperCase(),q:String(arguments[2]||'')}).map(p=>({
+    lomba:L[p.lomba]?.name||p.lomba,tingkat:LEVEL_NAME[p.tingkat]||p.tingkat,nomor_peserta:p.nomor_peserta,nama_peserta:p.nama_peserta,
+    lingkungan_kub:p.lingkungan_kub||'',urut_tampil:p.urut_tampil||''
+  }));
+}
+function scoreRecapRows(q='',tingkat=''){
+  const rows=db.prepare(`SELECT s.id,s.participant_id,s.jury_id,s.total,s.note,s.saved_at,s.updated_at,
+    p.nomor_peserta,p.nama_peserta,p.lomba,p.tingkat,p.lingkungan_kub
+    FROM scores s JOIN participants p ON p.id=s.participant_id
+    ORDER BY p.lomba,p.tingkat,p.nomor_peserta,s.jury_id`).all();
+  const qq=String(q||'').toLowerCase(); const lv=LEVEL_NAME[String(tingkat||'').toUpperCase()]?String(tingkat).toUpperCase():'';
+  const out=[];
+  for(const x of rows){
+    if(lv && x.tingkat!==lv) continue;
+    const seat=assignedJuriesFor(x.lomba,x.tingkat).find(u=>u.id===x.jury_id) || (x.tingkat==='TEMU_MINGGU' ? assignedJuriesFor(x.lomba,x.tingkat).find(u=>legacyJuryIdFor(x.lomba,u.judge_no)===x.jury_id) : null);
+    if(!seat) continue;
+    const obj={lombaKey:x.lomba,lomba:L[x.lomba]?.name||x.lomba,tingkat:LEVEL_NAME[x.tingkat]||x.tingkat,tingkatKey:x.tingkat,nomor_peserta:x.nomor_peserta,nama_peserta:x.nama_peserta,lingkungan_kub:x.lingkungan_kub||'',jury_id:x.jury_id,nama_juri:seat.nama||seat.username||'',judge_no:seat.judge_no,total:Number(x.total),catatan:x.note||'',waktu:x.updated_at||x.saved_at||''};
+    if(!qq || `${obj.lomba} ${obj.tingkat} ${obj.nomor_peserta} ${obj.nama_peserta} ${obj.nama_juri} ${obj.jury_id} ${obj.lingkungan_kub}`.toLowerCase().includes(qq)) out.push(obj);
+  }
+  return out;
+}
+function userResultRows({userId='',judgeNo=null,q='',tingkat=''}={}){
+  const rows=db.prepare(`SELECT s.id,s.participant_id,s.jury_id,s.total,s.note,s.saved_at,s.updated_at,
+    p.nomor_peserta,p.nama_peserta,p.lomba,p.tingkat,p.lingkungan_kub
+    FROM scores s JOIN participants p ON p.id=s.participant_id
+    ORDER BY p.lomba,p.tingkat,p.nomor_peserta,s.jury_id`).all();
+  const lv=LEVEL_NAME[String(tingkat||'').toUpperCase()]?String(tingkat).toUpperCase():''; const qq=String(q||'').toLowerCase(); const out=[];
+  for(const x of rows){
+    if(lv && x.tingkat!==lv) continue;
+    const seats=assignedJuriesFor(x.lomba,x.tingkat); let seat=seats.find(u=>u.id===x.jury_id); if(!seat && x.tingkat==='TEMU_MINGGU')seat=seats.find(u=>legacyJuryIdFor(x.lomba,u.judge_no)===x.jury_id); if(!seat)continue;
+    if(userId && Number(seat.user_id)!==Number(userId))continue; if(judgeNo!==null&&Number(judgeNo)>0&&Number(seat.judge_no)!==Number(judgeNo))continue;
+    const obj={user_id:seat.user_id,username:seat.username||'',nama_juri:seat.nama||'',judge_no:seat.judge_no,jury_id:x.jury_id,lombaKey:x.lomba,lomba:L[x.lomba]?.name||x.lomba,tingkatKey:x.tingkat,tingkat:LEVEL_NAME[x.tingkat]||x.tingkat,nomor_peserta:x.nomor_peserta,nama_peserta:x.nama_peserta,lingkungan_kub:x.lingkungan_kub||'',total:Number(x.total),catatan:x.note||'',waktu:x.updated_at||x.saved_at||''};
+    if(!qq || `${obj.username} ${obj.nama_juri} Juri ${obj.judge_no} ${obj.jury_id} ${obj.nomor_peserta} ${obj.nama_peserta} ${obj.lomba} ${obj.tingkat}`.toLowerCase().includes(qq))out.push(obj);
+  }
+  return out;
+}
+async function sendXlsx(res, filename, title, columns, rows){
+  const wb=new ExcelJS.Workbook(); wb.creator='E-Juri Rewa Male'; wb.created=new Date();
+  const ws=wb.addWorksheet(title.slice(0,31)||'Data');
+  ws.addRow([title]); ws.mergeCells(1,1,1,columns.length); ws.getRow(1).font={bold:true,size:14};
+  ws.addRow(columns.map(c=>c.header)); ws.getRow(2).font={bold:true}; ws.freezePanes={row:3};
+  for(const row of rows) ws.addRow(columns.map(c=>row[c.key]??''));
+  ws.autoFilter={from: {row:2,column:1}, to:{row:Math.max(2,ws.rowCount),column:columns.length}};
+  columns.forEach((c,i)=>{ws.getColumn(i+1).width=Math.min(42,Math.max(12,c.header.length+2, ...rows.slice(0,50).map(r=>String(r[c.key]??'').length+2)));});
+  ws.eachRow((r,idx)=>{ if(idx>=3) r.alignment={vertical:'top',wrapText:true}; });
+  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition',`attachment; filename="${filename}"`);
+  await wb.xlsx.write(res); res.end();
+}
+function sendPdf(res, filename, title, columns, rows){
+  const doc=new PDFDocument({size:'A4',margin:28,layout:'landscape'});
+  res.setHeader('Content-Type','application/pdf'); res.setHeader('Content-Disposition',`attachment; filename="${filename}"`); doc.pipe(res);
+  doc.fontSize(15).font('Helvetica-Bold').text(title,{align:'center'}); doc.moveDown(0.35); doc.fontSize(8).font('Helvetica');
+  const widths=columns.map(c=>Math.max(55, Math.min(150, c.width||80))); const total=widths.reduce((a,b)=>a+b,0); const scale=(doc.page.width-doc.page.margins.left-doc.page.margins.right)/total; const ws=widths.map(w=>w*scale);
+  let y=doc.y, x=doc.page.margins.left, rowH=22;
+  const drawRow=(vals,header=false)=>{x=doc.page.margins.left; let maxLines=1; vals.forEach((v,i)=>{const text=String(v??'');const w=ws[i];const h=header?28:rowH;doc.rect(x,y,w,h).stroke();doc.font(header?'Helvetica-Bold':'Helvetica').fontSize(header?7.5:7).text(text,x+3,y+4,{width:w-6,height:h-7,ellipsis:true});x+=w;});return header?28:rowH};
+  let headerVals=columns.map(c=>c.header); y+=2; y+=drawRow(headerVals,true)+4;
+  for(const row of rows){ if(y+rowH>doc.page.height-doc.page.margins.bottom-15){doc.addPage({size:'A4',layout:'landscape',margin:28});y=doc.page.margins.top;drawRow(headerVals,true);y+=32;} drawRow(columns.map(c=>row[c.key]??''));y+=rowH; }
+  if(!rows.length) doc.fontSize(10).text('Tidak ada data.'); doc.end();
+}
+app.get('/api/export.xlsx',requireAuth,async (req,res)=>{
+  if(req.session.user?.role!=='admin' && String(req.query.type||'')!=='user-results'){
+    return res.status(403).json({error:'Export ini hanya tersedia untuk Admin.'});
+  }
+  const type=String(req.query.type||'results'); const lomba=String(req.query.lomba||''); const q=String(req.query.q||''); const userId=String(req.query.userId||''); const tingkat=String(req.query.tingkat||'TEMU_MINGGU').toUpperCase();
+  try{
+    if(type==='dashboard') return sendXlsx(res,'e-juri-dashboard.xlsx','Dashboard E-Juri Rewa Male',[
+      {key:'lomba',header:'Lomba'},{key:'peserta',header:'Peserta'},{key:'penilaian',header:'Input Penilaian'},{key:'peserta_lengkap',header:'Peserta Lengkap'},{key:'ranking_aktif',header:'Ranking Aktif'}],dashboardRows());
+    if(type==='participants') return sendXlsx(res,'e-juri-peserta.xlsx','Data Peserta',[
+      {key:'lomba',header:'Lomba'},{key:'tingkat',header:'Tingkat'},{key:'nomor_peserta',header:'Nomor Peserta'},{key:'nama_peserta',header:'Nama Peserta / Kelompok'},{key:'lingkungan_kub',header:'Lingkungan/KUB'},{key:'urut_tampil',header:'Urut Tampil'}],participantRows(lomba,tingkat,q));
+    if(type==='settings'){const s=getSettings(); const row={nama_kegiatan:s.nama_kegiatan,stasi_paroki:s.stasi_paroki||'',tanggal:s.tanggal||'',tempat:s.tempat||'',ketua_panitia:s.ketua_panitia||'',catatan:s.catatan||''}; const cols=[{key:'nama_kegiatan',header:'Nama Kegiatan'},{key:'stasi_paroki',header:'Stasi/Paroki'},{key:'tanggal',header:'Tanggal'},{key:'tempat',header:'Tempat'},{key:'ketua_panitia',header:'Ketua Panitia'},{key:'catatan',header:'Catatan'}]; Object.keys(L).forEach(k=>{row[k]=s.locks?.[k]?'TERTUTUP':'TERBUKA';cols.push({key:k,header:L[k].name});}); return sendXlsx(res,'e-juri-identitas.xlsx','Identitas Kegiatan & Kontrol Lomba',cols,[row]);}
+    if(type==='users'){return sendXlsx(res,'e-juri-users.xlsx','Juri & User',[{key:'username',header:'Username'},{key:'nama',header:'Nama'},{key:'role',header:'Role'},{key:'judge_no',header:'Nomor Juri'},{key:'active',header:'Status'}],db.prepare('SELECT username,nama,role,judge_no,active FROM users ORDER BY role DESC,username').all().map(x=>({...x,active:x.active?'AKTIF':'NONAKTIF'})));}
+    if(type==='audit'){const rows=db.prepare(`SELECT a.action,a.entity,a.entity_id,a.details,a.created_at,u.username,u.nama FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_user_id ORDER BY a.id DESC LIMIT 500`).all();return sendXlsx(res,'e-juri-audit.xlsx','Audit Log', [{key:'created_at',header:'Waktu'},{key:'username',header:'Username'},{key:'action',header:'Aksi'},{key:'entity',header:'Entity'},{key:'entity_id',header:'ID'},{key:'details',header:'Keterangan'}],rows);}
+    if(type==='score-recap'){return sendXlsx(res,'e-juri-rekap-nilai.xlsx','Rekap Nilai Server',[{key:'lomba',header:'Lomba'},{key:'tingkat',header:'Tingkat'},{key:'nomor_peserta',header:'Nomor Peserta'},{key:'nama_peserta',header:'Peserta'},{key:'lingkungan_kub',header:'Lingkungan/KUB'},{key:'jury_id',header:'ID Juri'},{key:'nama_juri',header:'Nama Juri'},{key:'total',header:'Total Nilai'},{key:'catatan',header:'Catatan'},{key:'waktu',header:'Waktu'}],scoreRecapRows(q,tingkat));}
+    if(type==='user-results'){const ur=req.session.user?.role==='juri'?userResultRows({judgeNo:Number(req.session.user.judge_no||getJudgeNo(req)),q,tingkat}):userResultRows({userId,q,tingkat});return sendXlsx(res,'e-juri-hasil-penilaian-user.xlsx','Hasil Penilaian User',[{key:'username',header:'Username'},{key:'nama_juri',header:'Nama Juri'},{key:'judge_no',header:'Juri Ke'},{key:'lomba',header:'Lomba'},{key:'tingkat',header:'Tingkat'},{key:'nomor_peserta',header:'Nomor Peserta'},{key:'nama_peserta',header:'Peserta'},{key:'lingkungan_kub',header:'Lingkungan/KUB'},{key:'total',header:'Total Nilai'},{key:'catatan',header:'Catatan'},{key:'waktu',header:'Waktu'}],ur);}
+    const k=lomba||Object.keys(L)[0]; const seats=assignedJuriesFor(k,tingkat); const cols=[{key:'rank',header:'Ranking'},{key:'nomor_peserta',header:'Nomor Peserta'},{key:'nama_peserta',header:'Peserta'},{key:'lingkungan_kub',header:'Lingkungan/KUB'},{key:'submitted',header:'Juri Masuk'},{key:'juryCount',header:'Jumlah Juri'}]; seats.forEach(j=>cols.push({key:`j${j.judge_no}`,header:`Juri ${j.judge_no}`})); cols.push({key:'average',header:'Rata-rata'},{key:'status',header:'Status'}); return sendXlsx(res,'e-juri-hasil-ranking.xlsx',`Hasil & Ranking - ${L[k].name}`,cols,resultRowsFor(k,tingkat));
+  }catch(e){res.status(500).json({error:'Export Excel gagal: '+e.message})}
+});
+app.get('/api/export.pdf',requireAuth,(req,res)=>{
+  if(req.session.user?.role!=='admin' && String(req.query.type||'')!=='user-results'){
+    return res.status(403).json({error:'Export ini hanya tersedia untuk Admin.'});
+  }
+  const type=String(req.query.type||'results'); const lomba=String(req.query.lomba||''); const q=String(req.query.q||''); const userId=String(req.query.userId||''); const tingkat=String(req.query.tingkat||'TEMU_MINGGU').toUpperCase();
+  try{
+    if(type==='dashboard') return sendPdf(res,'e-juri-dashboard.pdf','Dashboard E-Juri Rewa Male',[{key:'lomba',header:'Lomba',width:150},{key:'peserta',header:'Peserta',width:65},{key:'penilaian',header:'Input',width:65},{key:'peserta_lengkap',header:'Lengkap',width:65},{key:'ranking_aktif',header:'Ranking Aktif',width:80}],dashboardRows());
+    if(type==='participants') return sendPdf(res,'e-juri-peserta.pdf','Data Peserta',[{key:'lomba',header:'Lomba',width:110},{key:'tingkat',header:'Tingkat',width:75},{key:'nomor_peserta',header:'No.',width:50},{key:'nama_peserta',header:'Peserta',width:145},{key:'lingkungan_kub',header:'Lingkungan/KUB',width:95},{key:'urut_tampil',header:'Urut',width:45}],participantRows(lomba,tingkat,q));
+    if(type==='settings'){const s=getSettings();const row={nama_kegiatan:s.nama_kegiatan,stasi_paroki:s.stasi_paroki||'',tanggal:s.tanggal||'',tempat:s.tempat||'',ketua_panitia:s.ketua_panitia||'',catatan:s.catatan||''};const cols=[{key:'nama_kegiatan',header:'Nama Kegiatan',width:120},{key:'stasi_paroki',header:'Stasi/Paroki',width:85},{key:'tanggal',header:'Tanggal',width:65},{key:'tempat',header:'Tempat',width:85},{key:'ketua_panitia',header:'Ketua Panitia',width:95},{key:'catatan',header:'Catatan',width:130}];Object.keys(L).forEach(k=>{row[k]=s.locks?.[k]?'TERTUTUP':'TERBUKA';cols.push({key:k,header:L[k].name,width:75});});return sendPdf(res,'e-juri-identitas.pdf','Identitas Kegiatan & Kontrol Lomba',cols,[row]);}
+    if(type==='users'){return sendPdf(res,'e-juri-users.pdf','Juri & User',[{key:'username',header:'Username',width:90},{key:'nama',header:'Nama',width:140},{key:'role',header:'Role',width:60},{key:'judge_no',header:'Juri',width:45},{key:'active',header:'Status',width:70}],db.prepare('SELECT username,nama,role,judge_no,active FROM users ORDER BY role DESC,username').all().map(x=>({...x,active:x.active?'AKTIF':'NONAKTIF'})));}
+    if(type==='audit'){const rows=db.prepare(`SELECT a.action,a.entity,a.entity_id,a.details,a.created_at,u.username FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_user_id ORDER BY a.id DESC LIMIT 500`).all();return sendPdf(res,'e-juri-audit.pdf','Audit Log',[{key:'created_at',header:'Waktu',width:100},{key:'username',header:'User',width:70},{key:'action',header:'Aksi',width:60},{key:'entity',header:'Entity',width:70},{key:'entity_id',header:'ID',width:55},{key:'details',header:'Keterangan',width:180}],rows);}
+    if(type==='score-recap'){return sendPdf(res,'e-juri-rekap-nilai.pdf','Rekap Nilai Server',[{key:'lomba',header:'Lomba',width:105},{key:'tingkat',header:'Tingkat',width:70},{key:'nomor_peserta',header:'No.',width:45},{key:'nama_peserta',header:'Peserta',width:115},{key:'lingkungan_kub',header:'Ling./KUB',width:75},{key:'jury_id',header:'Juri',width:45},{key:'nama_juri',header:'Nama Juri',width:85},{key:'total',header:'Total',width:48},{key:'catatan',header:'Catatan',width:105},{key:'waktu',header:'Waktu',width:90}],scoreRecapRows(q,tingkat));}
+    if(type==='user-results'){const ur=req.session.user?.role==='juri'?userResultRows({judgeNo:Number(req.session.user.judge_no||getJudgeNo(req)),q,tingkat}):userResultRows({userId,q,tingkat});return sendPdf(res,'e-juri-hasil-penilaian-user.pdf','Hasil Penilaian User',[{key:'username',header:'Username',width:70},{key:'nama_juri',header:'Nama Juri',width:100},{key:'judge_no',header:'Juri',width:40},{key:'lomba',header:'Lomba',width:95},{key:'nomor_peserta',header:'No.',width:40},{key:'nama_peserta',header:'Peserta',width:110},{key:'lingkungan_kub',header:'Ling./KUB',width:70},{key:'total',header:'Total',width:45},{key:'catatan',header:'Catatan',width:100},{key:'waktu',header:'Waktu',width:95}],ur);}
+    const k=lomba||Object.keys(L)[0];const seats=assignedJuriesFor(k,tingkat);const cols=[{key:'rank',header:'Rank',width:42},{key:'nomor_peserta',header:'No.',width:48},{key:'nama_peserta',header:'Peserta',width:120},{key:'lingkungan_kub',header:'Ling./KUB',width:75},{key:'submitted',header:'Juri',width:40},{key:'juryCount',header:'Jumlah Juri',width:50}];seats.forEach(j=>cols.push({key:`j${j.judge_no}`,header:`J${j.judge_no}`,width:42}));cols.push({key:'average',header:'Rata2',width:48},{key:'status',header:'Status',width:70});return sendPdf(res,'e-juri-hasil-ranking.pdf',`Hasil & Ranking - ${L[k].name}`,cols,resultRowsFor(k,tingkat));
+  }catch(e){res.status(500).json({error:'Export PDF gagal: '+e.message})}
+});
+app.get('/api/export.csv',requireAuth,(req,res)=>{
+  const lomba=String(req.query.lomba||''); const tingkat=String(req.query.tingkat||'').toUpperCase(); const ps=getParticipants({lomba,tingkat:LEVEL_NAME[tingkat]?tingkat:''});
+  const maxJ=Math.max(0,...Object.keys(L).flatMap(k=>LEVELS.map(lv=>assignedJuriesFor(k,lv.key).length)));
+  const rows=[['Lomba','Tingkat','Kode','Peserta/Kelompok','Lingkungan/KUB',...Array.from({length:maxJ},(_,i)=>`Juri ${i+1}`),'Total','Nilai Akhir %','Status']];
+  for(const p of ps){const j=assignedJuriesFor(p.lomba,p.tingkat);const sm=getScoresMap();const vals=j.map(x=>{const s=sm.get(`${p.id}:${x.id}`)||(p.tingkat==='TEMU_MINGGU'?sm.get(`${p.id}:${legacyJuryIdFor(p.lomba,x.judge_no)}`):null);return s?.total??''});const complete=j.length>0&&vals.every(v=>v!=='');const total=complete?vals.reduce((a,b)=>a+Number(b),0):''; rows.push([L[p.lomba].name,LEVEL_NAME[p.tingkat]||p.tingkat,p.nomor_peserta,p.nama_peserta,p.lingkungan_kub,...vals,...Array(Math.max(0,maxJ-vals.length)).fill(''),total,complete?(Number(total)/j.length).toFixed(2):'',complete?'SELESAI':'BELUM LENGKAP']);}
+  const csv=rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\r\n'); res.setHeader('Content-Type','text/csv; charset=utf-8');res.setHeader('Content-Disposition','attachment; filename="e-juri-rewa-male.csv"');res.send(csv);
+});
+
+
+io.on('connection',socket=>{socket.emit('server:ready',{at:now()})});
+app.use((req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
+server.listen(PORT,HOST,()=>console.log(`E-Juri Rewa Male berjalan di http://localhost:${PORT}`));
+
+@echo off
+cd /d "%~dp0"
+set PORT=3000
+
+echo ==============================================
+echo E-Juri Rewa Male - Server + Ngrok
+echo ==============================================
+where node >nul 2>&1 || (echo Node.js belum terpasang.&pause&exit /b 1)
+where ngrok >nul 2>&1 || (
+  echo Ngrok belum ditemukan di PATH.
+  echo Install ngrok terlebih dahulu, lalu jalankan kembali file ini.
+  echo Setelah install, pastikan perintah "ngrok version" berjalan di CMD.
+  pause
+  exit /b 1
+)
+if not exist package.json (echo package.json tidak ditemukan.&pause&exit /b 1)
+if not exist node_modules (
+  echo Menginstall dependency...
+  call npm install
+  if errorlevel 1 (echo Gagal menginstall dependency.&pause&exit /b 1)
+)
+
+echo.
+echo Membuka server E-Juri pada port %PORT%...
+start "E-Juri Server" /D "%~dp0" cmd /k "set PORT=%PORT%&& node server.js"
+timeout /t 3 /nobreak >nul
+
+echo.
+echo Membuka tunnel Ngrok...
+echo Alamat HTTPS akan tampil di jendela Ngrok.
+echo Gunakan alamat https://...ngrok... untuk diakses dari perangkat lain.
+echo.
+ngrok http %PORT%
+pause
+
+@echo off
+cd /d "%~dp0"
+echo E-Juri Rewa Male V8 • Single Login E-Juri Rewa Male V8 • Single Login & Tingkat Peserta Tingkat Peserta
+where node >nul 2>&1 || (echo Node.js belum terpasang.&pause&exit /b 1)
+if not exist package.json (echo package.json tidak ditemukan.&pause&exit /b 1)
+if not exist node_modules (echo Menginstall dependency...&call npm install)
+echo Menjalankan server...
+node server.js
+pause
+
+@echo off
+setlocal
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":3000" ^| findstr "LISTENING"') do taskkill /PID %%P /F >nul 2>&1
+echo Server pada port 3000 sudah dihentikan jika sedang berjalan.
+pause
